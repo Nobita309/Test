@@ -38,7 +38,7 @@ jobs:
       - name: oisd
         run: |
           echo "Downloading oisd big block list..."
-          curl -s 'https://big.oisd.nl' -o oisd_big_abp.txt
+          curl -s 'https://big.oisd.nl'
           sing-box rule-set convert --type adguard oisd_big_abp.txt --output oisd_big_abp.srs
 
       - name: pro
