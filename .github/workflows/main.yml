@@ -34,23 +34,24 @@ jobs:
           sudo tee /etc/apt/sources.list.d/sagernet.list > /dev/null
           sudo apt-get update
           sudo apt-get install sing-box # or sing-box-beta
+          sudo apt-get install wget
 
       - name: oisd
         run: |
           echo "Downloading oisd big block list..."
-          curl -s 'https://big.oisd.nl'
+          wget 'https://big.oisd.nl'
           sing-box rule-set convert --type adguard oisd_big_abp.txt --output oisd_big_abp.srs
 
       - name: pro
         run: |
           echo "Downloading hagezi pro block list..."
-          curl -s 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt'
+          wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt'
           sing-box rule-set convert --type adguard pro.plus.txt --output pro.plus.srs
 
       - name: tif
         run: |
           echo "Downloading hagezi tif block list..."
-          curl -s 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt'
+          wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt'
           sing-box rule-set convert --type adguard tif.txt --output tif.srs
 
       - uses: stefanzweifel/git-auto-commit-action@v4
