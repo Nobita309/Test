@@ -1,0 +1,44 @@
+name: adblock
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - name: Delete previous workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
+
+      - name: oisd
+        run: |
+          echo "Downloading oisd big block list..."
+          curl -s 'https://big.oisd.nl' -o oisd_big_abp.srs
+
+      - name: pro
+        run: |
+          echo "Downloading hagezi pro block list..."
+          curl -s 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt' -o pro.plus.srs
+
+      - name: tif
+        run: |
+          echo "Downloading hagezi tif block list..."
+          curl -s 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt' -o tif.srs
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Automatic update
