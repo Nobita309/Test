@@ -38,21 +38,21 @@ jobs:
         run: |
           echo "Downloading oisd big block list..."
           wget 'https://big.oisd.nl' -O oisd_big_abp.txt
-          sing-box rule-set convert --type adguard oisd_big_abp.txt --output oisd_big_abp.srs
+          sing-box rule-set convert --type adguard --output oisd_big_abp.srs oisd_big_abp.txt
           rm -rf oisd_big_abp.txt
 
       - name: pro
         run: |
           echo "Downloading hagezi pro block list..."
           wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt' -O pro.plus.txt
-          sing-box rule-set convert --type adguard pro.plus.txt --output pro.plus.srs
+          sing-box rule-set convert --type adguard --output pro.plus.srs pro.plus.txt
           rm -rf pro.plus.txt
 
       - name: tif
         run: |
           echo "Downloading hagezi tif block list..."
           wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt' -O tif.txt
-          sing-box rule-set convert --type adguard tif.txt --output tif.srs
+          sing-box rule-set convert --type adguard --output tif.srs tif.txt
           rm -rf tif.txt
 
       - uses: stefanzweifel/git-auto-commit-action@v4
