@@ -55,14 +55,14 @@ jobs:
       - name: pro
         run: |
           echo "Downloading hagezi pro block list..."
-          wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.plus.txt' -O pro.plus.txt
+          wget 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/adblock/pro.plus.txt' -O pro.plus.txt
           sing-box rule-set convert --type adguard --output pro.plus.srs pro.plus.txt
           rm -rf pro.plus.txt
 
       - name: tif
         run: |
           echo "Downloading hagezi tif block list..."
-          wget 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt' -O tif.txt
+          wget 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/adblock/tif.txt' -O tif.txt
           sing-box rule-set convert --type adguard --output tif.srs tif.txt
           rm -rf tif.txt
 
