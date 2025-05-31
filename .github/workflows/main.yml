@@ -1,0 +1,71 @@
+name: adblock
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - name: Delete previous workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
+
+      - name: Restore sing-box cache
+        id: cache-sing-box
+        uses: actions/cache@v3
+        with:
+          path: sing-box
+          key: sing-box-${{ runner.os }}-v1
+          
+      - name: sing
+        run: |
+          sudo curl -fsSL https://sing-box.app/gpg.key -o /etc/apt/keyrings/sagernet.asc
+          sudo chmod a+r /etc/apt/keyrings/sagernet.asc
+          echo "deb [arch=`dpkg --print-architecture` signed-by=/etc/apt/keyrings/sagernet.asc] https://deb.sagernet.org/ * *" | \
+          sudo tee /etc/apt/sources.list.d/sagernet.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install sing-box wget
+          mkdir -p sing-box
+          cp "$(which sing-box)" sing-box/
+
+      - name: Add sing-box to PATH
+        run: echo "${{ github.workspace }}/sing-box" >> $GITHUB_PATH
+
+      - name: oisd
+        run: |
+          echo "Downloading oisd big block list..."
+          wget 'https://big.oisd.nl/domainswild2' -O oisd_big_domainswild2.txt
+          sing-box rule-set convert --type adguard --output oisd_big_domainswild2.srs oisd_big_domainswild2.txt
+          rm -rf oisd_big_domainswild2.txt
+
+      - name: pro
+        run: |
+          echo "Downloading hagezi pro block list..."
+          wget 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/domains/pro.plus.txt' -O pro.plus.txt
+          sing-box rule-set convert --type adguard --output pro.plus.srs pro.plus.txt
+          rm -rf pro.plus.txt
+
+      - name: tif
+        run: |
+          echo "Downloading hagezi tif block list..."
+          wget 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/domains/tif.txt' -O tif.txt
+          sing-box rule-set convert --type adguard --output tif.srs tif.txt
+          rm -rf tif.txt
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Automatic update
