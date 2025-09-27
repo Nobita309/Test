@@ -1,0 +1,101 @@
+name: adblock
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete previous workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
+
+      - name: sing
+        run: |
+          curl -fsSL https://sing-box.app/install.sh | sh
+
+      - name: Generate rule-sets in parallel (oisd / pro / tif)
+        run: |
+          set -u
+          jobs=(
+            "https://big.oisd.nl/domainswild|oisd_big_domainswild.txt|oisd.srs|oisd"
+            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/wildcard/pro.txt|pro.txt|pro.srs|pro"
+            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/wildcard/tif.txt|tif.txt|tif.srs|tif"
+          )
+
+          declare -A pid_name
+
+          for entry in "${jobs[@]}"; do
+            IFS='|' read -r url infile outfile shortname <<< "$entry"
+
+            (
+              set -o pipefail
+              echo ">>> START $shortname"
+              if ! curl -fSL --retry 3 --retry-delay 2 "$url" -o "$infile"; then
+                echo "DOWNLOAD FAILED: $shortname ($url)" >&2
+                exit 2
+              fi
+
+              echo "Downloaded $shortname -> $infile (lines: $(wc -l < "$infile" || echo 0))"
+
+              if ! sing-box rule-set convert --type adguard --output "$outfile" "$infile"; then
+                echo "CONVERT FAILED: $shortname" >&2
+                exit 3
+              fi
+
+              echo "Converted $shortname -> $outfile"
+              rm -f "$infile"
+              echo ">>> DONE $shortname"
+            ) &
+
+            pid=$!
+            pid_name[$pid]="$shortname"
+            echo "Started $shortname (pid $pid)"
+          done
+
+          overall_ok=0
+          for pid in "${!pid_name[@]}"; do
+            shortname="${pid_name[$pid]}"
+            if wait "$pid"; then
+              echo "PID $pid ($shortname) finished OK"
+            else
+              rc=$?
+              echo "PID $pid ($shortname) FAILED with exit code $rc"
+              overall_ok=1
+            fi
+          done
+
+          if [ "$overall_ok" -ne 0 ]; then
+            echo "One or more parallel jobs failed. See step logs for details."
+            exit 1
+          fi
+
+          echo "All parallel jobs completed successfully."
+          ls -lah *.srs || true
+
+      - name: Commit and push if there are changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add *.srs
+          if ! git diff --staged --quiet; then
+            git commit -m "Update adblock rule files"
+            git push
+          else
+            echo "No changes to commit."
+          fi
