@@ -31,62 +31,21 @@ jobs:
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
-          set -u
-          jobs=(
-            "https://big.oisd.nl/domainswild|oisd_big_domainswild.txt|oisd.srs|oisd"
-            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/wildcard/pro.txt|pro.txt|pro.srs|pro"
-            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@main/wildcard/tif.txt|tif.txt|tif.srs|tif"
-          )
-
-          declare -A pid_name
-
-          for entry in "${jobs[@]}"; do
-            IFS='|' read -r url infile outfile shortname <<< "$entry"
-
-            (
-              set -o pipefail
-              echo ">>> START $shortname"
-              if ! curl -fSL --retry 3 --retry-delay 2 "$url" -o "$infile"; then
-                echo "DOWNLOAD FAILED: $shortname ($url)" >&2
-                exit 2
-              fi
-
-              echo "Downloaded $shortname -> $infile (lines: $(wc -l < "$infile" || echo 0))"
-
-              if ! sing-box rule-set convert --type adguard --output "$outfile" "$infile"; then
-                echo "CONVERT FAILED: $shortname" >&2
-                exit 3
-              fi
-
-              echo "Converted $shortname -> $outfile"
-              rm -f "$infile"
-              echo ">>> DONE $shortname"
-            ) &
-
-            pid=$!
-            pid_name[$pid]="$shortname"
-            echo "Started $shortname (pid $pid)"
-          done
-
-          overall_ok=0
-          for pid in "${!pid_name[@]}"; do
-            shortname="${pid_name[$pid]}"
-            if wait "$pid"; then
-              echo "PID $pid ($shortname) finished OK"
-            else
-              rc=$?
-              echo "PID $pid ($shortname) FAILED with exit code $rc"
-              overall_ok=1
-            fi
-          done
-
-          if [ "$overall_ok" -ne 0 ]; then
-            echo "One or more parallel jobs failed. See step logs for details."
-            exit 1
-          fi
-
-          echo "All parallel jobs completed successfully."
-          ls -lah *.srs || true
+          set -e
+          gen() {
+              URL="$1"; OUT="$2"
+              # Download the text-based adblock list
+              curl -fsSL "$URL" -o "${OUT}.txt"
+              # Convert to binary SRS format
+              sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
+              echo "Generated ${OUT}.srs"
+              # Clean up the text file
+              rm "${OUT}.txt"
+          }
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
+          gen "https://big.oisd.nl/domainswild" oisd &
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
+          wait
 
       - name: Commit and push if there are changes
         run: |
