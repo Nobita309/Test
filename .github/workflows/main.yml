@@ -1,0 +1,60 @@
+name: adblock
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete previous workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
+
+      - name: sing
+        run: |
+          curl -fsSL https://sing-box.app/install.sh | sh
+
+      - name: Generate rule-sets in parallel (oisd / pro / tif)
+        run: |
+          set -e
+          gen() {
+              URL="$1"; OUT="$2"
+              # Download the text-based adblock list
+              curl -fsSL "$URL" -o "${OUT}.txt"
+              # Convert to binary SRS format
+              sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
+              echo "Generated ${OUT}.srs"
+              # Clean up the text file
+              rm "${OUT}.txt"
+          }
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt" pro &
+          gen "https://big.oisd.nl" oisd &
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.txt" tif &
+          wait
+
+      - name: Commit and push if there are changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add *.srs
+          if ! git diff --staged --quiet; then
+            git commit -m "Update adblock rule files"
+            git push
+          else
+            echo "No changes to commit."
+          fi
