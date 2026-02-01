@@ -52,6 +52,7 @@ jobs:
               rm "${OUT}.txt"
               echo "Generated ${OUT}.srs"
           }
+
           gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
           gen "https://big.oisd.nl/domainswild" oisd &
           gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
