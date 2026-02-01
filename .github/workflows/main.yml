@@ -35,7 +35,13 @@ jobs:
           gen() {
               URL="$1"; OUT="$2"
               # Download the text-based adblock list
-              curl -fsSL "$URL" -o "${OUT}.txt"
+              curl -fsSL --retry 5 --retry-delay 2 "$URL" -o "${OUT}.txt"
+              # Kiểm tra file không rỗng và không phải HTML
+              test -s "${OUT}.txt"
+              if grep -qiE '<html|<!doctype html' "${OUT}.txt"; then
+               echo "Source for ${OUT} looks like HTML error page. Abort."
+               exit 1
+              fi
               # Convert to binary SRS format
               sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
               rm "${OUT}.txt"
