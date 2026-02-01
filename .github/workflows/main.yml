@@ -49,9 +49,8 @@ jobs:
               curl -fsSL "$URL" -o "${OUT}.txt"
               # Convert to binary SRS format
               sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
-              echo "Generated ${OUT}.srs"
-              # Clean up the text file
               rm "${OUT}.txt"
+              echo "Generated ${OUT}.srs"
           }
           gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
           gen "https://big.oisd.nl/domainswild" oisd &
