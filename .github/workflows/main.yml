@@ -42,9 +42,9 @@ jobs:
               # Clean up the text file
               rm "${OUT}.txt"
           }
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt" pro &
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
           gen "https://big.oisd.nl/domainswild" oisd &
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.txt" tif &
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
           wait
 
       - name: Commit and push if there are changes
