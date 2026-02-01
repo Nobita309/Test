@@ -27,17 +27,7 @@ jobs:
 
       - name: Install sing-box
         run: |
-          sudo mkdir -p /etc/apt/keyrings
-          sudo curl -fsSL https://sing-box.app/gpg.key -o /etc/apt/keyrings/sagernet.asc
-          sudo chmod a+r /etc/apt/keyrings/sagernet.asc
-          echo 'Types: deb
-          URIs: https://deb.sagernet.org/
-          Suites: *
-          Components: *
-          Enabled: yes
-          Signed-By: /etc/apt/keyrings/sagernet.asc' | sudo tee /etc/apt/sources.list.d/sagernet.sources
-          sudo apt-get update
-          sudo apt-get install -y sing-box
+          curl -fsSL https://sing-box.app/install.sh | sh
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
@@ -45,13 +35,7 @@ jobs:
           gen() {
               URL="$1"; OUT="$2"
               # Download the text-based adblock list
-              curl -fsSL --retry 5 --retry-delay 2 "$URL" -o "${OUT}.txt"
-              # Kiểm tra file không rỗng và không phải HTML
-              test -s "${OUT}.txt"
-              if grep -qiE '<html|<!doctype html' "${OUT}.txt"; then
-               echo "Source for ${OUT} looks like HTML error page. Abort."
-               exit 1
-              fi
+              curl -fsSL "$URL" -o "${OUT}.txt"
               # Convert to binary SRS format
               sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
               # Clean up the text file
