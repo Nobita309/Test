@@ -32,7 +32,7 @@ jobs:
         id: cache-sing-box
         uses: actions/cache@v3
         with:
-          path: /usr/local/bin/sing-box
+          path: ./
           key: ${{ runner.os }}-sing-box
 
       - name: Install sing-box (if not cached)
@@ -60,9 +60,10 @@ jobs:
 
       - name: Commit and push if there are changes
         run: |
+          set -euo pipefail
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add *.srs
+          git add *.srs || true
           if ! git diff --staged --quiet; then
             git commit -m "Update adblock rule files"
             git push
