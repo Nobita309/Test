@@ -25,18 +25,7 @@ jobs:
             curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
           done
 
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Cache sing-box
-        id: cache-sing-box
-        uses: actions/cache@v3
-        with:
-          path: ./
-          key: ${{ runner.os }}-sing-box
-
-      - name: Install sing-box (if not cached)
-        if: steps.cache-sing-box.outputs.cache-hit != 'true'
+      - name: Install sing-box
         run: |
           curl -fsSL https://sing-box.app/install.sh | sudo sh
 
