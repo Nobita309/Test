@@ -77,28 +77,4 @@ jobs:
             git push
           else
             echo "No changes to commit."
-          fi              # Download the text-based adblock list
-              curl -fsSL "$URL" -o "${OUT}.txt"
-              # Convert to binary SRS format
-              sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
-              # Clean up the text file
-              rm "${OUT}.txt"
-              echo "Generated ${OUT}.srs"
-          }
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
-          gen "https://big.oisd.nl/domainswild" oisd &
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
-          wait
-
-      - name: Commit and push if there are changes
-        run: |
-          set -euo pipefail
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add *.srs || true
-          if ! git diff --staged --quiet; then
-            git commit -m "Update adblock rule files"
-            git push
-          else
-            echo "No changes to commit."
           fi
