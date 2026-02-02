@@ -15,26 +15,69 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install aria2 (for stable fast downloads)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2
+
       - name: Delete previous workflow runs
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs" | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
-          for run_id in $PREVIOUS_RUNS; do
+          set -euo pipefail
+
+          # List completed runs (avoid deleting in-progress)
+          RUN_IDS=$(gh api "repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status=="completed") | .id')
+
+          for run_id in $RUN_IDS; do
             echo "Deleting workflow run ID: $run_id"
-            curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$run_id" >/dev/null
           done
 
       - name: Install sing-box
         run: |
-          curl -fsSL https://sing-box.app/install.sh | sh
+          set -euo pipefail
+          aria2c -x 8 -s 8 -m 0 --retry-wait=5 --connect-timeout=10 --timeout=30 \
+            -o install_singbox.sh https://sing-box.app/install.sh
+          sh install_singbox.sh
+          rm -f install_singbox.sh
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
-          set -e
-          gen() {
-              URL="$1"; OUT="$2"
-              # Download the text-based adblock list
+          set -euo pipefail
+
+          dl() {
+            URL="$1"; OUT="$2"
+            # Download with aria2 (stable + retry + multi-conn)
+            aria2c -x 8 -s 8 -m 0 --retry-wait=5 --connect-timeout=10 --timeout=30 \
+              -o "${OUT}.txt" "$URL"
+
+            # Convert to binary SRS format
+            sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
+
+            # Clean up
+            rm -f "${OUT}.txt"
+            echo "Generated ${OUT}.srs"
+          }
+
+          dl "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
+          dl "https://big.oisd.nl/domainswild" oisd &
+          dl "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
+          wait
+
+      - name: Commit and push if there are changes
+        run: |
+          set -euo pipefail
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add *.srs || true
+          if ! git diff --staged --quiet; then
+            git commit -m "Update adblock rule files"
+            git push
+          else
+            echo "No changes to commit."
+          fi              # Download the text-based adblock list
               curl -fsSL "$URL" -o "${OUT}.txt"
               # Convert to binary SRS format
               sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
