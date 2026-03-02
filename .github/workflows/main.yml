@@ -25,6 +25,7 @@ jobs:
       - name: Install sing-box (only if not cached)
         if: steps.cache-singbox.outputs.cache-hit != 'true'
         run: |
+          mkdir -p ./sing-box
           while true; do
             if curl -fsSL https://sing-box.app/install.sh | sh; then
               break
@@ -32,6 +33,10 @@ jobs:
             echo "Retrying install sing-box..."
             sleep 5
           done
+
+      - name: Add sing-box to PATH
+        run: |
+          echo "${{ github.workspace }}/./sing-box" >> "$GITHUB_PATH"
 
       - name: Generate rule-sets in parallel
         run: |
