@@ -15,42 +15,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Delete previous workflow runs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs" \
-            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+      - name: Cache Sing-box
+        id: cache-singbox
+        uses: actions/cache@v4
+        with:
+          path: ./sing-box
+          key: ${{ runner.os }}-singbox-v2
 
-          for run_id in $PREVIOUS_RUNS; do
-            echo "Deleting workflow run ID: $run_id"
-            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
-          done
-
-      - name: Install sing-box (retry forever)
+      - name: Install sing-box (only if not cached)
+        if: steps.cache-singbox.outputs.cache-hit != 'true'
         run: |
+          mkdir -p ./sing-box
           while true; do
             if curl -fsSL https://sing-box.app/install.sh | sh; then
               break
             fi
             echo "Retrying install sing-box..."
+            sleep 5
           done
 
-      - name: Generate rule-sets in parallel (oisd / pro / tif)
+      - name: Add sing-box to PATH
+        run: |
+          echo "${{ github.workspace }}/./sing-box" >> "$GITHUB_PATH"
+
+      - name: Generate rule-sets in parallel
         run: |
           set -e
-
           gen() {
             URL="$1"
             OUT="$2"
-
-            while true; do
-              curl -fsSL "$URL" -o "${OUT}.txt" && break
-              echo "Retrying $OUT..."
-            done
-
+            curl -fsSL "$URL" -o "${OUT}.txt"
+            
             sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
             rm "${OUT}.txt"
             echo "Generated ${OUT}.srs"
@@ -63,15 +58,27 @@ jobs:
 
       - name: Commit and push if there are changes
         run: |
-          set -euo pipefail
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-
-          git add *.srs || true
-
+          git add *.srs
           if ! git diff --staged --quiet; then
-            git commit -m "Update adblock rule files"
+            git commit -m "Update adblock rule files [$(date)]"
             git push
           else
             echo "No changes to commit."
           fi
+
+      - name: Delete previous workflow runs
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs" \
+            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
