@@ -9,50 +9,96 @@ permissions:
   actions: write
   contents: write
 
+concurrency:
+  group: adblock-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Delete previous workflow runs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs" \
-            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+          set -euo pipefail
+          PREVIOUS_RUNS=$(
+            curl -fsSL -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=100" \
+            | jq -r '.workflow_runs[] | select(.status == "completed") | .id'
+          )
 
           for run_id in $PREVIOUS_RUNS; do
             echo "Deleting workflow run ID: $run_id"
-            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+            curl -fsSL -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id" || true
           done
 
-      - name: Install sing-box (retry forever)
+      - name: Get latest sing-box version
+        id: sbv
         run: |
-          while true; do
-            if curl -fsSL https://sing-box.app/install.sh | sh; then
-              break
-            fi
-            echo "Retrying install sing-box..."
-          done
+          set -euo pipefail
+          ver=$(
+            curl -fsSL https://api.github.com/repos/SagerNet/sing-box/releases/latest \
+            | jq -r '.tag_name' | sed 's/^v//'
+          )
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Latest sing-box: $ver"
+
+      - name: Restore sing-box cache
+        id: cache-sb
+        uses: actions/cache@v4
+        with:
+          path: .cache/sing-box
+          key: sing-box-${{ runner.os }}-${{ steps.sbv.outputs.version }}
+
+      - name: Download sing-box (if not cached)
+        if: steps.cache-sb.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/sing-box
+          ver="${{ steps.sbv.outputs.version }}"
+
+          url="https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-amd64.tar.gz"
+
+          echo "Downloading $url"
+          curl -fsSL --retry 10 --retry-delay 2 --retry-all-errors \
+            "$url" -o /tmp/sing-box.tgz
+
+          tar -xzf /tmp/sing-box.tgz -C /tmp
+          rm -f /tmp/sing-box.tgz
+
+          found="$(find /tmp -maxdepth 2 -type f -name sing-box | head -n 1)"
+          if [ -z "$found" ]; then
+            echo "ERROR: sing-box binary not found after extract"
+            exit 1
+          fi
+
+          cp "$found" .cache/sing-box/sing-box
+          chmod +x .cache/sing-box/sing-box
+          .cache/sing-box/sing-box version || true
+
+      - name: Add sing-box to PATH
+        run: |
+          echo "${{ github.workspace }}/.cache/sing-box" >> "$GITHUB_PATH"
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
-          set -e
+          set -euo pipefail
 
           gen() {
             URL="$1"
             OUT="$2"
 
-            while true; do
-              curl -fsSL "$URL" -o "${OUT}.txt" && break
-              echo "Retrying $OUT..."
-            done
+            curl -fsSL --retry 10 --retry-delay 2 --retry-all-errors \
+              "$URL" -o "${OUT}.txt"
 
             sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
-            rm "${OUT}.txt"
+            rm -f "${OUT}.txt"
             echo "Generated ${OUT}.srs"
           }
 
@@ -68,7 +114,6 @@ jobs:
           git config --local user.name "GitHub Action"
 
           git add *.srs || true
-
           if ! git diff --staged --quiet; then
             git commit -m "Update adblock rule files"
             git push
