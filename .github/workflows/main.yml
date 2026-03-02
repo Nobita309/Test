@@ -15,14 +15,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install sing-box (retry forever)
+      - name: Get latest sing-box version
+        id: sbver
         run: |
-          while true; do
-            if curl -fsSL https://sing-box.app/install.sh | sh; then
-              break
-            fi
-            echo "Retrying install sing-box..."
-          done
+          set -euo pipefail
+          ver="$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -r .tag_name)"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Cache sing-box binary
+        id: sbcache
+        uses: actions/cache@v4
+        with:
+          path: .cache/sing-box/${{ steps.sbver.outputs.version }}/sing-box
+          key: sing-box-${{ runner.os }}-${{ steps.sbver.outputs.version }}
+
+      - name: Install sing-box (use cache if available)
+        run: |
+          set -euo pipefail
+          VER="${{ steps.sbver.outputs.version }}"
+          CACHED=".cache/sing-box/$VER/sing-box"
+
+          if [ -f "$CACHED" ]; then
+            sudo install -m 0755 "$CACHED" /usr/local/bin/sing-box
+            sing-box version
+            exit 0
+          fi
+
+          # cache miss: install đúng version latest hiện tại
+          curl -fsSL https://sing-box.app/install.sh | sh -s -- --version "$VER"
+
+          # lưu lại binary vào cache path
+          mkdir -p ".cache/sing-box/$VER"
+          cp -f "$(command -v sing-box)" "$CACHED"
+          sing-box version
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
