@@ -19,7 +19,7 @@ jobs:
         id: cache-singbox
         uses: actions/cache@v4
         with:
-          path: /usr/local/bin/sing-box
+          path: ./sing-box
           key: ${{ runner.os }}-singbox-v2
 
       - name: Install sing-box (only if not cached)
