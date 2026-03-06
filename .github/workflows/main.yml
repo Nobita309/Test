@@ -12,10 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install sing-box (retry forever)
         run: |
@@ -24,7 +22,6 @@ jobs:
               break
             fi
             echo "Retrying install sing-box..."
-            sleep 2
           done
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
@@ -35,6 +32,49 @@ jobs:
             URL="$1"
             OUT="$2"
 
+            while true; do
+              curl -fsSL "$URL" -o "${OUT}.txt" && break
+              echo "Retrying $OUT..."
+            done
+
+            sing-box rule-set convert --type adguard --output "${OUT}.srs" "${OUT}.txt"
+            rm "${OUT}.txt"
+            echo "Generated ${OUT}.srs"
+          }
+
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro.txt" pro &
+          gen "https://big.oisd.nl/domainswild" oisd &
+          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/tif.txt" tif &
+          wait
+
+      - name: Commit and push if there are changes
+        run: |
+          set -euo pipefail
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add *.srs || true
+
+          if ! git diff --staged --quiet; then
+            git commit -m "Update adblock rule files"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+
+      - name: Delete previous workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs" \
+            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+
+          for run_id in $PREVIOUS_RUNS; do
+            echo "Deleting workflow run ID: $run_id"
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
+          done
             while true; do
               curl -fsSL "$URL" -o "${OUT}.txt" && break
               echo "Retrying $OUT..."
