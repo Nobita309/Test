@@ -62,16 +62,27 @@ jobs:
             echo "No changes to commit."
           fi
 
-      - name: Delete previous workflow runs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PREVIOUS_RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs" \
-            | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
+      - name: Delete workflow runs older than 7 days
+   env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    set -e
 
-          for run_id in $PREVIOUS_RUNS; do
-            echo "Deleting workflow run ID: $run_id"
-            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$run_id"
-          done
+    CUTOFF=$(date -u -d "7 days ago" +%s)
+
+    RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+      "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=100")
+
+    echo "$RUNS" | jq -c '.workflow_runs[]' | while read run; do
+      RUN_ID=$(echo "$run" | jq -r '.id')
+      CREATED=$(echo "$run" | jq -r '.created_at')
+
+      CREATED_TS=$(date -d "$CREATED" +%s)
+
+      if [ "$CREATED_TS" -lt "$CUTOFF" ]; then
+        echo "Deleting run $RUN_ID (created $CREATED)"
+        curl -s -X DELETE \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID"
+      fi
+    done
