@@ -53,13 +53,9 @@ jobs:
 
       - name: Commit and push if there are changes
         run: |
-          set -e
-
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-
-          git add *.srs || true
-
+          git add *.srs
           if ! git diff --staged --quiet; then
             git commit -m "Update adblock rule files"
             git push
@@ -71,23 +67,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-
-          CUTOFF=$(date -u -d "7 days ago" +%s)
-
-          RUNS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=100")
-
-          echo "$RUNS" | jq -c '.workflow_runs[]' | while read run; do
-            RUN_ID=$(echo "$run" | jq -r '.id')
-            CREATED=$(echo "$run" | jq -r '.created_at')
-
-            CREATED_TS=$(date -d "$CREATED" +%s)
-
-            if [ "$CREATED_TS" -lt "$CUTOFF" ]; then
-              echo "Deleting run $RUN_ID (created $CREATED)"
-              curl -s -X DELETE \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID"
-            fi
-          done
+          gh run delete --repo ${{ github.repository }} --older-than 7d
