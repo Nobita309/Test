@@ -67,4 +67,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh run delete --repo ${{ github.repository }} --older-than 7d
+          set -e
+
+          cutoff=$(date -u -d '7 days ago' +%s)
+
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --paginate \
+            --jq '.workflow_runs[] | "\(.id) \(.created_at)"' |
+          while read -r run_id created_at; do
+            run_time=$(date -u -d "$created_at" +%s)
+
+            if [ "$run_time" -lt "$cutoff" ]; then
+              echo "Deleting run $run_id created at $created_at"
+              gh api \
+                --method DELETE \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${{ github.repository }}/actions/runs/$run_id"
+            fi
+          done
