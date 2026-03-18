@@ -68,5 +68,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+
           until OUTPUT=$(gh api repos/OWNER/REPO/commits/main --template '{{.commit.author.date}}' 2>/dev/null); do sleep 5; done
           date -d "$OUTPUT"
