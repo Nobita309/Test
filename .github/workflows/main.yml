@@ -67,32 +67,10 @@ jobs:
             echo "No changes to commit."
           fi
 
-      - name: Delete workflow runs older than 7 days
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-
-          while true; do
-            CUTOFF=$(date -u -d "7 days ago" +%s)
-
-            RUNS=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=100") && break
-
-            echo "Retrying fetch workflow runs..."
-            sleep 2
-          done
-
-          echo "$RUNS" | jq -c '.workflow_runs[]' | while read -r run; do
-            RUN_ID=$(echo "$run" | jq -r '.id')
-            CREATED=$(echo "$run" | jq -r '.created_at')
-
-            CREATED_TS=$(date -d "$CREATED" +%s)
-
-            if [ "$CREATED_TS" -lt "$CUTOFF" ]; then
-              echo "Deleting run $RUN_ID (created $CREATED)"
-              curl -fsSL -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID"
-            fi
-          done
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 3
