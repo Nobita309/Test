@@ -61,11 +61,20 @@ jobs:
           git add *.srs || true
 
           if ! git diff --staged --quiet; then
-            git commit -m "Update adblock rule files"
-            git push
-          else
-            echo "No changes to commit."
-          fi
+          git commit -m "Update adblock rule files"
+
+
+          while true; do
+            if git push; then
+                echo "git push succeeded."
+                break
+            fi
+              echo "git push failed, retrying in 3 seconds"
+              sleep 3
+              done
+            else
+              echo "No changes to commit."
+            fi
 
       - name: Delete workflow runs older than 7 days
         env:
