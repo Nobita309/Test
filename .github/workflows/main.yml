@@ -19,13 +19,19 @@ jobs:
 
       - name: Install sing-box (retry forever)
         run: |
-          while true; do
-            if curl -fsSL https://sing-box.app/install.sh | sh; then
-              break
-            fi
-            echo "Retrying install sing-box..."
-            sleep 2
-          done
+          sudo mkdir -p /etc/apt/keyrings &&
+             sudo curl -fsSL https://sing-box.app/gpg.key -o /etc/apt/keyrings/sagernet.asc &&
+             sudo chmod a+r /etc/apt/keyrings/sagernet.asc &&
+             echo '
+          Types: deb
+          URIs: https://deb.sagernet.org/
+          Suites: *
+          Components: *
+          Enabled: yes
+          Signed-By: /etc/apt/keyrings/sagernet.asc
+          ' | sudo tee /etc/apt/sources.list.d/sagernet.sources &&
+             sudo apt-get update &&
+             sudo apt-get install sing-box
 
       - name: Generate rule-sets in parallel (oisd / pro / tif)
         run: |
