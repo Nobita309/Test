@@ -52,9 +52,9 @@ jobs:
             echo "Generated ${OUT}.srs"
           }
 
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt" pro &
+          gen "https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/adblock/pro.txt" pro &
           gen "https://big.oisd.nl" oisd &
-          gen "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.txt" tif &
+          gen "https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/adblock/tif.txt" tif &
           wait
 
       - name: Commit and push if there are changes
